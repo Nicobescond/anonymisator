@@ -173,6 +173,40 @@ def create_pdf(text, filename):
     """
     buffer = BytesIO()
     
+    # Nettoyer le texte des caractères spéciaux et emojis
+    # Remplacer les emojis et caractères non-ASCII problématiques
+    text_cleaned = text
+    # Supprimer les emojis courants
+    emoji_pattern = re.compile("["
+        u"\U0001F600-\U0001F64F"  # emoticons
+        u"\U0001F300-\U0001F5FF"  # symboles & pictogrammes
+        u"\U0001F680-\U0001F6FF"  # transport & symboles de carte
+        u"\U0001F1E0-\U0001F1FF"  # drapeaux
+        u"\U00002702-\U000027B0"
+        u"\U000024C2-\U0001F251"
+        "]+", flags=re.UNICODE)
+    text_cleaned = emoji_pattern.sub(r'', text_cleaned)
+    
+    # Remplacer les caractères accentués problématiques
+    replacements = {
+        'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
+        'À': 'A', 'Â': 'A', 'Ä': 'A',
+        'Ù': 'U', 'Û': 'U', 'Ü': 'U',
+        'Ô': 'O', 'Ö': 'O',
+        'Ç': 'C',
+        'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+        'à': 'a', 'â': 'a', 'ä': 'a',
+        'ù': 'u', 'û': 'u', 'ü': 'u',
+        'ô': 'o', 'ö': 'o',
+        'ç': 'c',
+        'î': 'i', 'ï': 'i',
+        ''': "'", ''': "'", '"': '"', '"': '"',
+        '–': '-', '—': '-',
+    }
+    
+    for old, new in replacements.items():
+        text_cleaned = text_cleaned.replace(old, new)
+    
     # Créer le document PDF
     doc = SimpleDocTemplate(
         buffer,
@@ -197,7 +231,7 @@ def create_pdf(text, filename):
     # Contenu
     story = []
     
-    # Ajouter un titre
+    # Ajouter un titre simple sans emoji
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
@@ -206,16 +240,19 @@ def create_pdf(text, filename):
         spaceAfter=12,
         alignment=TA_LEFT
     )
-    story.append(Paragraph("CV ANONYMISÉ - CONFORME RGPD", title_style))
+    story.append(Paragraph("CV ANONYMISE - CONFORME RGPD", title_style))
     story.append(Spacer(1, 0.5*cm))
     
     # Ajouter le contenu du CV ligne par ligne
-    lines = text.split('\n')
+    lines = text_cleaned.split('\n')
     for line in lines:
         if line.strip():
             # Échapper les caractères spéciaux pour reportlab
             line_escaped = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            story.append(Paragraph(line_escaped, style_normal))
+            # Supprimer tout caractère non-ASCII restant
+            line_escaped = line_escaped.encode('ascii', 'ignore').decode('ascii')
+            if line_escaped.strip():  # Ne pas ajouter de lignes vides
+                story.append(Paragraph(line_escaped, style_normal))
         else:
             story.append(Spacer(1, 0.2*cm))
     

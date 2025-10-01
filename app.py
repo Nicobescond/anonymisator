@@ -4,6 +4,13 @@ import PyPDF2
 import docx
 import json
 from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.enums import TA_LEFT
 
 # Configuration de la page
 st.set_page_config(
@@ -158,6 +165,68 @@ def anonymize_cv(text, custom_firstname="", custom_lastname=""):
     )
     
     return anonymized
+
+# Fonction pour créer un PDF du CV anonymisé
+def create_pdf(text, filename):
+    """
+    Crée un PDF à partir du texte anonymisé
+    """
+    buffer = BytesIO()
+    
+    # Créer le document PDF
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=2*cm,
+        leftMargin=2*cm,
+        topMargin=2*cm,
+        bottomMargin=2*cm
+    )
+    
+    # Styles
+    styles = getSampleStyleSheet()
+    style_normal = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=10,
+        leading=14,
+        alignment=TA_LEFT,
+        spaceAfter=6,
+    )
+    
+    # Contenu
+    story = []
+    
+    # Ajouter un titre
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=14,
+        textColor='#333333',
+        spaceAfter=12,
+        alignment=TA_LEFT
+    )
+    story.append(Paragraph("CV ANONYMISÉ - CONFORME RGPD", title_style))
+    story.append(Spacer(1, 0.5*cm))
+    
+    # Ajouter le contenu du CV ligne par ligne
+    lines = text.split('\n')
+    for line in lines:
+        if line.strip():
+            # Échapper les caractères spéciaux pour reportlab
+            line_escaped = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            story.append(Paragraph(line_escaped, style_normal))
+        else:
+            story.append(Spacer(1, 0.2*cm))
+    
+    # Générer le PDF
+    doc.build(story)
+    
+    # Récupérer le contenu du buffer
+    pdf_data = buffer.getvalue()
+    buffer.close()
+    
+    return pdf_data
 
 # Fonction pour créer un export structuré JSON
 def create_structured_export(anonymized_text):
@@ -319,9 +388,23 @@ with col2:
         # Boutons de téléchargement
         st.subheader("💾 Téléchargement")
         
-        col_dl1, col_dl2, col_dl3 = st.columns(3)
+        col_dl1, col_dl2, col_dl3, col_dl4 = st.columns(4)
         
         with col_dl1:
+            # Export PDF (PRIORITAIRE pour votre appli d'analyse)
+            pdf_data = create_pdf(anonymized_cv, output_filename)
+            
+            st.download_button(
+                label="📕 PDF (recommandé)",
+                data=pdf_data,
+                file_name=f"{output_filename}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                help="Format PDF pour votre application d'analyse",
+                type="primary"
+            )
+        
+        with col_dl2:
             # Export texte
             st.download_button(
                 label="📄 Texte (.txt)",
@@ -332,13 +415,13 @@ with col2:
                 help="Format texte simple"
             )
         
-        with col_dl2:
+        with col_dl3:
             # Export JSON structuré
             structured_data = create_structured_export(anonymized_cv)
             json_data = json.dumps(structured_data, ensure_ascii=False, indent=2)
             
             st.download_button(
-                label="📊 JSON structuré",
+                label="📊 JSON",
                 data=json_data,
                 file_name=f"{output_filename}.json",
                 mime="application/json",
@@ -346,7 +429,7 @@ with col2:
                 help="Format JSON pour analyse automatique"
             )
         
-        with col_dl3:
+        with col_dl4:
             # Export CSV (lignes du CV)
             csv_data = anonymized_cv.replace('\n', '|||')
             

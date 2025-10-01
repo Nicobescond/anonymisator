@@ -29,12 +29,33 @@ def extract_text_from_docx(docx_file):
     return text
 
 # Fonction d'anonymisation RGPD renforcée
-def anonymize_cv(text):
+def anonymize_cv(text, custom_firstname="", custom_lastname=""):
     """
     Anonymise les données personnelles sensibles du CV selon le RGPD
+    Permet également de masquer manuellement un nom et prénom spécifique
     """
     anonymized = text
     
+    # ÉTAPE 1 : Masquer le nom et prénom fournis manuellement (prioritaire)
+    if custom_firstname.strip():
+        # Masquer le prénom exact (insensible à la casse)
+        anonymized = re.sub(
+            rf'\b{re.escape(custom_firstname)}\b',
+            '[PRÉNOM_MASQUÉ]',
+            anonymized,
+            flags=re.IGNORECASE
+        )
+    
+    if custom_lastname.strip():
+        # Masquer le nom exact (insensible à la casse)
+        anonymized = re.sub(
+            rf'\b{re.escape(custom_lastname)}\b',
+            '[NOM_MASQUÉ]',
+            anonymized,
+            flags=re.IGNORECASE
+        )
+    
+    # ÉTAPE 2 : Masquer automatiquement les autres noms/prénoms potentiels (patterns RGPD)
     # Masquer les noms et prénoms courants (patterns basiques)
     # Recherche de "Prénom NOM" en début de ligne ou après certains mots-clés
     anonymized = re.sub(
@@ -201,6 +222,29 @@ col1, col2 = st.columns([1, 1])
 with col1:
     st.header("📤 CV Original")
     
+    # Section pour saisir manuellement le nom et prénom
+    with st.expander("✍️ Nom et prénom à masquer (optionnel)", expanded=False):
+        st.info("💡 Pour une anonymisation précise, indiquez le nom et prénom du candidat")
+        
+        col_name1, col_name2 = st.columns(2)
+        
+        with col_name1:
+            custom_firstname = st.text_input(
+                "Prénom",
+                placeholder="ex: Jean",
+                help="Le prénom sera masqué partout dans le CV"
+            )
+        
+        with col_name2:
+            custom_lastname = st.text_input(
+                "Nom",
+                placeholder="ex: DUPONT",
+                help="Le nom sera masqué partout dans le CV"
+            )
+        
+        if custom_firstname or custom_lastname:
+            st.success(f"✅ Masquage manuel activé : {custom_firstname or '[prénom]'} {custom_lastname or '[nom]'}")
+    
     # Upload de fichier
     uploaded_file = st.file_uploader(
         "Choisissez un fichier CV",
@@ -239,12 +283,22 @@ with col2:
     if cv_text:
         # Anonymisation
         with st.spinner("🔒 Anonymisation en cours..."):
-            anonymized_cv = anonymize_cv(cv_text)
+            anonymized_cv = anonymize_cv(cv_text, custom_firstname, custom_lastname)
             # Stocker la date de traitement
             import datetime
             st.session_state['processing_date'] = datetime.datetime.now().isoformat()
         
         st.success("✅ Anonymisation terminée")
+        
+        # Afficher les éléments masqués
+        masking_info = []
+        if custom_firstname:
+            masking_info.append(f"Prénom: **{custom_firstname}**")
+        if custom_lastname:
+            masking_info.append(f"Nom: **{custom_lastname}**")
+        
+        if masking_info:
+            st.info("🎯 Masquage manuel: " + " | ".join(masking_info))
         
         # Champ pour personnaliser le nom du fichier
         output_filename = st.text_input(
